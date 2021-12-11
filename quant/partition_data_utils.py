@@ -147,7 +147,7 @@ class GetLayerInpOut:
         if len(self.layer) == 1:
             data_saver1 = data_saver2 = self.data_saver2
         else:
-            data_saver1 = data_saver2 = self.data_saver1, self.data_saver2
+            data_saver1, data_saver2 = self.data_saver1, self.data_saver2
         #print("data_saver1", data_saver1.input_store)
         #print("data_saver2", data_saver2.output_store)
         return data_saver1.input_store[0].detach(), data_saver2.output_store.detach()

@@ -156,8 +156,8 @@ class LossFunction:
             raise NotImplementedError
 
         total_loss = rec_loss + round_loss
-        if self.count % 500 == 0:
-            print('Total loss:\t{:.3f} (rec:{:.3f}, round:{:.3f})\tb={:.2f}\tcount={}'.format(
-                  float(total_loss), float(rec_loss), float(round_loss), b, self.count))
+        #if self.count % 500 == 0:
+        #    print('Total loss:\t{:.3f} (rec:{:.3f}, round:{:.3f})\tb={:.2f}\tcount={}'.format(
+        #          float(total_loss), float(rec_loss), float(round_loss), b, self.count))
         return total_loss
 

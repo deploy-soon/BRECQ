@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from quant import QuantModel, QuantModule, BaseQuantBlock
+from quant import *
 import multiprocessing
 import argparse
 import os
@@ -233,14 +233,15 @@ class GA(object):
     def init_chromosome(self):
         solutions = []
         for _ in range(self.populations):
-            solution = [0] * (len(self.names) // 2) + [1] * (len(self.names) // 2 - 1)
-            random.shuffle(solution)
+            solution = [random.randint(0, 1) for _ in range(len(self.names) - 1)]
             solutions.append(solution)
         self.solutions = solutions
 
         if self.num_workers > 1:
             pool = multiprocessing.Pool(processes=self.num_workers)
             result = [pool.apply_async(_evaluate, [solution, self.names, self.args]) for solution in solutions]
+            pool.close()
+            pool.join()
             self.scores = [r.get() for r in result]
         else:
             self.scores = [self.evaluate(solution) for solution in solutions]
@@ -294,6 +295,8 @@ class GA(object):
         if self.num_workers > 1:
             pool = multiprocessing.Pool(processes=self.num_workers)
             result = [pool.apply_async(_evaluate, [child, self.names, self.args]) for child in childs]
+            pool.close()
+            pool.join()
             child_scores = [r.get() for r in result]
         else:
             child_scores = [self.evaluate(child) for child in childs]

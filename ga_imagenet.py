@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
+from quant import QuantModel, QuantModule, BaseQuantBlock
+import multiprocessing
 import argparse
 import os
 import random
 import numpy as np
 import time
 import hubconf
-from quant import *
 from data.imagenet import build_imagenet_data
 
 
@@ -54,7 +55,7 @@ class ProgressMeter(object):
     def display(self, batch):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
-        print('\t'.join(entries))
+        #print('\t'.join(entries))
 
     def _get_batch_fmtstr(self, num_batches):
         num_digits = len(str(num_batches // 1))
@@ -206,14 +207,28 @@ def evaluate(args, partitions):
 
     return score
 
+def _evaluate(solution, names, args):
+    partitions = []
+    partition = [names[0]]
+    for switch, name in zip(solution, names[1:]):
+        if switch:
+            partitions.append(partition)
+            partition = [name]
+        else:
+            partition.append(name)
+    partitions.append(partition)
+    score = evaluate(args, partitions)
+    return score
+
 class GA(object):
 
-    def __init__(self, args, names, populations, generations):
+    def __init__(self, args, names, populations, generations, num_workers=0):
         self.populations = populations
         self.replace_nums = populations // 2
         self.generations = generations
         self.names = names
         self.args = args
+        self.num_workers = num_workers
 
     def init_chromosome(self):
         solutions = []
@@ -222,7 +237,13 @@ class GA(object):
             random.shuffle(solution)
             solutions.append(solution)
         self.solutions = solutions
-        self.scores = [self.evaluate(solution) for solution in solutions]
+
+        if self.num_workers > 1:
+            pool = multiprocessing.Pool(processes=self.num_workers)
+            result = [pool.apply_async(_evaluate, [solution, self.names, self.args]) for solution in solutions]
+            self.scores = [r.get() for r in result]
+        else:
+            self.scores = [self.evaluate(solution) for solution in solutions]
 
     def evaluate(self, solution):
         partitions = []
@@ -269,9 +290,17 @@ class GA(object):
         return childs
 
     def replace(self, childs):
+
+        if self.num_workers > 1:
+            pool = multiprocessing.Pool(processes=self.num_workers)
+            result = [pool.apply_async(_evaluate, [child, self.names, self.args]) for child in childs]
+            child_scores = [r.get() for r in result]
+        else:
+            child_scores = [self.evaluate(child) for child in childs]
+
         for idx, child in enumerate(childs):
             self.solutions[idx] = child
-            self.scores[idx] = self.evaluate(child)
+            self.scores[idx] = child_scores[idx]
 
     def _log(self, generation):
         print("GEN [{}] BEST SCORE {}".format(generation, self.scores[-1]))
@@ -314,7 +343,7 @@ def run_ga(args):
                 names.append(name)
 
 
-    ga = GA(args, names, args.populations, args.generations)
+    ga = GA(args, names, args.populations, args.generations, args.num_workers)
     ga.run()
 
 if __name__ == '__main__':
@@ -356,6 +385,7 @@ if __name__ == '__main__':
     # GA
     parser.add_argument('--populations', default=10, type=int)
     parser.add_argument('--generations', default=10, type=int)
+    parser.add_argument('--num_workers', default=0, type=int, help="number of parallel workers for evaluate")
 
     args = parser.parse_args()
 

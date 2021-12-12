@@ -107,7 +107,7 @@ class GetLayerInpOut:
         self.asym = asym
         self.device = device
         self.act_quant = act_quant
-        self.data_saver1 = DataSaverHook(store_input=True, store_output=False, stop_forward=True)
+        self.data_saver1 = DataSaverHook(store_input=True, store_output=False, stop_forward=False)
         if len(layer) == 1:
             self.data_saver2 = DataSaverHook(store_input=True, store_output=True, stop_forward=True)
         else:

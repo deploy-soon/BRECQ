@@ -134,7 +134,7 @@ def recon_model(model, partitions, **kwargs):
     """
     for name, module in model.named_modules():
         if isinstance(module, QuantModule) and not module.ignore_reconstruction:
-            if "layer" not in name:
+            if "layer" not in name and "features" not in name:
                 print('Reconstruction for layer {}'.format(name))
                 layer_reconstruction(model, module, **kwargs)
             for partition in partitions:
@@ -230,6 +230,16 @@ class GA(object):
         self.args = args
         self.num_workers = num_workers
 
+        self.save_path = None
+        if args.save_ga:
+            self.save_path = os.path.join(args.save_ga, time.strftime("%Y%m%d_%H%M%S.log", time.gmtime()))
+            if not os.path.exists(args.save_ga):
+                os.makedirs(args.save_ga)
+            with open(self.save_path, "w") as fout:
+                for arg in vars(args):
+                    fout.write(f"[PARAM {arg} - {getattr(args, arg)}]\n")
+
+
     def init_chromosome(self):
         solutions = []
         for _ in range(self.populations):
@@ -246,7 +256,8 @@ class GA(object):
         else:
             self.scores = [self.evaluate(solution) for solution in solutions]
 
-    def evaluate(self, solution):
+    def get_partition(self, solution):
+
         partitions = []
         partition = [self.names[0]]
         for switch, name in zip(solution, self.names[1:]):
@@ -256,6 +267,10 @@ class GA(object):
             else:
                 partition.append(name)
         partitions.append(partition)
+        return partitions
+
+    def evaluate(self, solution):
+        partitions = self.get_partition(solution)
         score = evaluate(self.args, partitions)
 
         return score
@@ -313,16 +328,21 @@ class GA(object):
 
         for generation in range(self.generations):
             tuples = list(zip(self.scores, self.solutions))
-            tuples = sorted(tuples, key=lambda x: -x[0])
+            tuples = sorted(tuples, key=lambda x: x[0])
             self.scores = [x[0] for x in tuples]
             self.solutions = [x[1] for x in tuples]
-            self._log(generation)
 
             parents = self.selection()
             childs = self.crossover(parents)
             childs = self.mutation(childs)
             self.replace(childs)
             self._log(generation)
+
+            if self.save_path is not None:
+                with open(self.save_path, "a") as fout:
+                    fout.write(f"[GEN {generation}] BEST SCORE {self.scores[-1]}\n")
+                    fout.write(f"[GEN {generation}] SCORES {self.scores}\n")
+                    fout.write(f"[GEN {generation}] BEST SOLUTION {self.get_partition(self.solutions[-1])}\n")
 
         tuples = list(zip(self.scores, self.solutions))
         tuples = sorted(tuples, key=lambda x: x[0])
@@ -331,6 +351,12 @@ class GA(object):
 
         best_score = self.scores[-1]
         best_solution = self.solutions[-1]
+
+        if self.save_path is not None:
+            with open(self.save_path, "a") as fout:
+                fout.write(f"[GEN LAST] BEST SCORE {self.scores[-1]}\n")
+                fout.write(f"[GEN LAST] BEST SOLUTION {self.get_partition(self.solutions[-1])}\n")
+
         return best_score, best_solution
 
 
@@ -342,7 +368,7 @@ def run_ga(args):
     names = []
     for name, module in model.named_modules():
         if isinstance(module, QuantModule) and not module.ignore_reconstruction:
-            if "layer" in name:
+            if "layer" in name or "features" in name:
                 names.append(name)
 
 
@@ -386,11 +412,11 @@ if __name__ == '__main__':
     parser.add_argument('--p', default=2.4, type=float, help='L_p norm minimization for LSQ')
 
     # GA
-    parser.add_argument('--populations', default=10, type=int)
-    parser.add_argument('--generations', default=10, type=int)
+    parser.add_argument('--populations', default=12, type=int)
+    parser.add_argument('--generations', default=20, type=int)
     parser.add_argument('--num_workers', default=0, type=int, help="number of parallel workers for evaluate")
+    parser.add_argument('--save_ga', default="logs", type=str, help="log path")
 
     args = parser.parse_args()
 
     run_ga(args)
-    #evaluate(args, None)

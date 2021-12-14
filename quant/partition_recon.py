@@ -40,7 +40,7 @@ def partition_reconstruction(model: QuantModel, partition: list, cali_data: torc
     for name, module in model.named_modules():
         if isinstance(module, BaseQuantBlock):
             for p_name in names:
-                if name in p_name:
+                if (name + ".") in p_name:
                     hull.append(module)
                     break
     hull = torch.nn.Sequential(*hull)
@@ -99,10 +99,11 @@ def partition_reconstruction(model: QuantModel, partition: list, cali_data: torc
     else:
         cached_grads = None
 
-    for name, p in partition:
-        p.set_quant_state(True, act_quant)
+    #for name, p in partition:
+    #    p.set_quant_state(True, act_quant)
     for module in hull:
-        module.use_act_quant = act_quant
+        #module.use_act_quant = act_quant
+        module.set_quant_state(True, act_quant)
 
     device = 'cuda'
     for i in range(iters):
